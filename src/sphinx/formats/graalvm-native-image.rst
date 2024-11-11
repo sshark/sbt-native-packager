@@ -5,7 +5,7 @@ GraalVM Native Image Plugin
 
 GraalVM's ``native-image`` compiles Java programs AOT (ahead-of-time) into native binaries.
 
-  https://www.graalvm.org/docs/reference-manual/aot-compilation/ documents the AOT compilation of GraalVM.
+  https://www.graalvm.org/22.1/reference-manual/native-image/ documents the AOT compilation of GraalVM.
 
 The plugin supports both using a local installation of the GraalVM ``native-image`` utility, or building inside a
 Docker container. If you intend to run the native image on Linux, then building inside a Docker container is
@@ -33,7 +33,7 @@ Build
 
 .. code-block:: bash
 
-  sbt 'show graalvm-native-image:packageBin'
+  sbt 'show GraalVMNativeImage/packageBin'
 
 
 Required Settings
@@ -116,5 +116,5 @@ Tasks
 -----
 The GraalVM Native Image plugin provides the following commands:
 
-  ``graalvm-native-image:packageBin``
+  ``GraalVMNativeImage / packageBin``
     Generates a native image using GraalVM.

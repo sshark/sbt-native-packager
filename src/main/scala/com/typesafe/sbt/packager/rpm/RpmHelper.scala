@@ -2,6 +2,7 @@ package com.typesafe.sbt.packager.rpm
 
 import sbt._
 import com.typesafe.sbt.packager.linux.LinuxSymlink
+import com.typesafe.sbt.packager.sourceDateEpoch
 
 object RpmHelper {
 
@@ -12,16 +13,21 @@ object RpmHelper {
   /**
     * Prepares the staging directory for the rpm build command.
     *
-    * @param spec The RpmSpec
-    * @param workArea The target
-    * @param log Logger
-    * @return the `workArea`
+    * @param spec
+    *   The RpmSpec
+    * @param workArea
+    *   The target
+    * @param log
+    *   Logger
+    * @return
+    *   the `workArea`
     */
   def stage(spec: RpmSpec, workArea: File, log: sbt.Logger): File = {
     buildWorkArea(workArea)
     copyFiles(spec, workArea, log)
     writeSpecFile(spec, workArea, log)
     spec.validate(log)
+    sourceDateEpoch(workArea)
     workArea
   }
 
@@ -31,10 +37,14 @@ object RpmHelper {
   /**
     * Build the rpm package
     *
-    * @param spec The RpmSpec
-    * @param stagingArea Prepared staging area
-    * @param log Logger
-    * @return The rpm package
+    * @param spec
+    *   The RpmSpec
+    * @param stagingArea
+    *   Prepared staging area
+    * @param log
+    *   Logger
+    * @return
+    *   The rpm package
     */
   def buildRpm(spec: RpmSpec, stagingArea: File, log: sbt.Logger): File = {
     buildPackage(stagingArea, spec, log)
@@ -99,7 +109,11 @@ object RpmHelper {
         "--define",
         "_topdir " + workArea.getAbsolutePath,
         "--define",
-        "_tmppath " + tmpRpmBuildDir.getAbsolutePath
+        "_tmppath " + tmpRpmBuildDir.getAbsolutePath,
+        "--define",
+        "%use_source_date_epoch_as_buildtime 1",
+        "--define",
+        "%clamp_mtime_to_source_date_epoch 1"
       ) ++ (
         if (gpg) Seq("--define", "_gpg_name " + "<insert keyname>", "--sign")
         else Seq.empty

@@ -9,7 +9,7 @@ import sbt.Keys._
 import sbt._
 
 /**
-  * == Bash StartScript Plugin ==
+  * ==Bash StartScript Plugin==
   *
   * This plugins creates a start bash script to run an application built with the
   * [[com.typesafe.sbt.packager.archetypes.JavaAppPackaging]].
@@ -45,7 +45,8 @@ object BashStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator wit
     override val executableScriptName: String,
     override val scriptClasspath: Seq[String],
     override val replacements: Seq[(String, String)],
-    override val templateLocation: File
+    override val templateLocation: File,
+    override val forwarderTemplateLocation: Option[File]
   ) extends ScriptConfig {
     override def withScriptName(scriptName: String): BashScriptConfig = copy(executableScriptName = scriptName)
   }
@@ -55,9 +56,10 @@ object BashStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator wit
   override def projectSettings: Seq[Setting[_]] =
     Seq(
       bashScriptTemplateLocation := (sourceDirectory.value / "templates" / bashTemplate),
+      bashForwarderTemplateLocation := Some(sourceDirectory.value / "templates" / forwarderTemplateName),
       bashScriptExtraDefines := Nil,
       bashScriptDefines := Defines(
-        (scriptClasspath in bashScriptDefines).value,
+        (bashScriptDefines / scriptClasspath).value,
         bashScriptConfigLocation.value,
         bundledJvmLocation.value
       ),
@@ -67,26 +69,27 @@ object BashStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator wit
       bashScriptConfigLocation := (bashScriptConfigLocation ?? Some(appIniLocation)).value,
       bashScriptEnvConfigLocation := (bashScriptEnvConfigLocation ?? None).value,
       // Generating the application configuration
-      mappings in Universal := generateApplicationIni(
-        (mappings in Universal).value,
-        (javaOptions in Universal).value,
+      Universal / mappings := generateApplicationIni(
+        (Universal / mappings).value,
+        (Universal / javaOptions).value,
         bashScriptConfigLocation.value,
-        (target in Universal).value,
+        (Universal / target).value,
         streams.value.log
       ),
       makeBashScripts := generateStartScripts(
         BashScriptConfig(
           executableScriptName = executableScriptName.value,
-          scriptClasspath = (scriptClasspath in bashScriptDefines).value,
+          scriptClasspath = (bashScriptDefines / scriptClasspath).value,
           replacements = bashScriptReplacements.value,
-          templateLocation = bashScriptTemplateLocation.value
+          templateLocation = bashScriptTemplateLocation.value,
+          forwarderTemplateLocation = bashForwarderTemplateLocation.value
         ),
-        (mainClass in (Compile, bashScriptDefines)).value,
-        (discoveredMainClasses in Compile).value,
-        (target in Universal).value / "scripts",
+        (Compile / bashScriptDefines / mainClass).value,
+        (Compile / discoveredMainClasses).value,
+        (Universal / target).value / "scripts",
         streams.value.log
       ),
-      mappings in Universal ++= makeBashScripts.value
+      Universal / mappings ++= makeBashScripts.value
     )
 
   private[this] def generateScriptReplacements(defines: Seq[String]): Seq[(String, String)] = {
@@ -95,8 +98,10 @@ object BashStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator wit
   }
 
   /**
-    * @param path that could be relative to app_home
-    * @return path relative to app_home
+    * @param path
+    *   that could be relative to app_home
+    * @return
+    *   path relative to app_home
     */
   protected def cleanApplicationIniPath(path: String): String = path.stripPrefix("${app_home}/../")
 
@@ -112,9 +117,10 @@ object BashStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator wit
     /**
       * Creates the block of defines for a script.
       *
-      * @param appClasspath A sequence of relative-locations (to the lib/ folder) of jars
-      *                     to include on the classpath.
-      * @param configFile An (optional) filename from which the script will read arguments.
+      * @param appClasspath
+      *   A sequence of relative-locations (to the lib/ folder) of jars to include on the classpath.
+      * @param configFile
+      *   An (optional) filename from which the script will read arguments.
       */
     def apply(appClasspath: Seq[String], configFile: Option[String], bundledJvm: Option[String]): Seq[String] =
       (configFile map configFileDefine).toSeq ++
@@ -122,10 +128,9 @@ object BashStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator wit
         (bundledJvm map bundledJvmDefine).toSeq
 
     private[this] def makeClasspathDefine(cp: Seq[String]): String = {
-      val fullString = cp map (
-        n =>
-          if (n.startsWith("/")) n
-          else "$lib_dir/" + n
+      val fullString = cp map (n =>
+        if (n.startsWith("/")) n
+        else "$lib_dir/" + n
       ) mkString ":"
       "declare -r app_classpath=\"" + fullString + "\"\n"
     }
@@ -143,13 +148,19 @@ object BashStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator wit
     else
       ""
 
+  private[this] def shellEscape(s: String): String =
+    if (s.startsWith("-jar "))
+      s
+    else
+      s"'${s.replace("'", "'\\''")}'"
+
   override protected[this] def createReplacementsForMainScript(
     mainClass: String,
     mainClasses: Seq[String],
     config: SpecializedScriptConfig
   ): Seq[(String, String)] =
     Seq(
-      "app_mainclass" -> mainClass,
+      "app_mainclass" -> shellEscape(mainClass),
       "available_main_classes" -> usageMainClassReplacement(mainClasses)
     ) ++ config.replacements
 }

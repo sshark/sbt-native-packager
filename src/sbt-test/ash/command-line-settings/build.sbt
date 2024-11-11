@@ -6,7 +6,7 @@ version := "0.1.0-SNAPSHOT"
 
 TaskKey[Unit]("checkSystemProperty") := {
   val configArg = "config.resource=/config.conf"
-  val cwd = (stagingDirectory in Universal).value
+  val cwd = (Universal / stagingDirectory).value
   val cmd = Seq((cwd / "bin" / packageName.value).getAbsolutePath, s"-D$configArg")
 
   val output = (sys.process.Process(cmd, cwd).!!).replaceAll("\n", "")
@@ -15,7 +15,7 @@ TaskKey[Unit]("checkSystemProperty") := {
 
 TaskKey[Unit]("checkResidual") := {
   val arg = "residualArg"
-  val cwd = (stagingDirectory in Universal).value
+  val cwd = (Universal / stagingDirectory).value
   val cmd = Seq((cwd / "bin" / packageName.value).getAbsolutePath, arg)
 
   val output = (sys.process.Process(cmd, cwd).!!).replaceAll("\n", "")
@@ -23,10 +23,27 @@ TaskKey[Unit]("checkResidual") := {
 }
 
 TaskKey[Unit]("checkComplexResidual") := {
-  val args = """arg1 "arg 2" 'arg "3"'"""
-  val cwd = (stagingDirectory in Universal).value
-  val cmd = Seq((cwd / "bin" / packageName.value).getAbsolutePath, args)
+  val args = Seq(
+    "-J-Dfoo=bar",
+    "arg1",
+    "--",
+    "-J-Dfoo=bar",
+    "arg 2",
+    "--",
+    "\"",
+    "$foo",
+    "'",
+    "%s",
+    "-y",
+    "bla",
+    "\\'",
+    "\\\"",
+    "''"
+  )
+  val cwd = (Universal / stagingDirectory).value
+  val cmd = Seq((cwd / "bin" / packageName.value).getAbsolutePath) ++ args
+  val expected = """arg1|-J-Dfoo=bar|arg 2|--|"|$foo|'|%s|-y|bla|\'|\"|''"""
 
-  val output = (sys.process.Process(cmd, cwd).!!).replaceAll("\n", "")
-  assert(output.contains(args), s"Application did not receive residual args '$args'")
+  val output = (sys.process.Process(cmd, cwd).!!).split("\n").last
+  assert(output == expected, s"Application did not receive residual args '$expected' (got '$output')")
 }

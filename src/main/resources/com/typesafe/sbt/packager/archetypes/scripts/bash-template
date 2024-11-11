@@ -154,7 +154,7 @@ addResidual () {
   residual_args+=( "$1" )
 }
 addDebugger () {
-  addJava "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=$1"
+  addJava "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:$1"
 }
 
 require_arg () {
@@ -200,9 +200,9 @@ process_args () {
 
      -java-home) require_arg path "$1" "$2" && jre=`eval echo $2` && java_cmd="$jre/bin/java" && shift 2 ;;
 
- -D*|-agentlib*|-XX*) addJava "$1" && shift ;;
-                 -J*) addJava "${1:2}" && shift ;;
-                   *) addResidual "$1" && shift ;;
+ -D*|-agentlib*|-agentpath*|-javaagent*|-XX*) addJava "$1" && shift ;;
+                                         -J*) addJava "${1:2}" && shift ;;
+                                           *) addResidual "$1" && shift ;;
     esac
   done
 
@@ -246,6 +246,16 @@ run() {
     mainclass=("${app_mainclass[@]}")
   fi
 
+  # Fallback to custom mainclass if main class is not provided (this is the case if the JAR contains multiple apps)
+  if [ "$app_mainclass" = "" ] || [ $custom_mainclass ];then
+    if [ "$custom_mainclass" = "" ]; then
+      echo "You need to pass -main argument."
+      exit 1
+    fi
+
+    app_mainclass=$custom_mainclass
+  fi
+
   # Now we check to see if there are any java opts on the environment. These get listed first, with the script able to override them.
   if [[ "$JAVA_OPTS" != "" ]]; then
     java_opts="${JAVA_OPTS}"
@@ -273,7 +283,7 @@ loadConfigFile() {
 }
 
 # Now check to see if it's a good enough version
-# TODO - Check to see if we have a configured default java version, otherwise use 1.6
+# TODO - Check to see if we have a configured default java version, otherwise use 1.8
 java_version_check() {
   readonly java_version=$("$java_cmd" -version 2>&1 | awk -F '"' '/version/ {print $2}')
   if [[ "$java_version" == "" ]]; then
@@ -287,10 +297,10 @@ java_version_check() {
     if [[ "$major" -eq "1" ]]; then
      local major=$(echo "$java_version" | cut -d'.' -f2)
     fi
-    if [[ "$major" -lt "6" ]]; then
+    if [[ "$major" -lt "8" ]]; then
       echo
       echo The java installation you have is not up to date
-      echo $app_name requires at least version 1.6+, you have
+      echo $app_name requires at least version 1.8+, you have
       echo version $java_version
       echo
       echo Please go to http://www.java.com/getjava/ and download

@@ -14,19 +14,20 @@ import sbt._
 import scala.util.matching.Regex
 
 /**
-  * == Debian Plugin ==
+  * ==Debian Plugin==
   *
   * This plugin provides the ability to build ''.deb'' packages.
   *
-  * == Configuration ==
+  * ==Configuration==
   *
   * In order to configure this plugin take a look at the available [[com.typesafe.sbt.packager.debian.DebianKeys]]
   *
-  * @example Enable the plugin in the `build.sbt`. By default this will use
-  * the native debian packaging implementation [[com.typesafe.sbt.packager.debian.DebianNativePackaging]].
-  * {{{
+  * @example
+  *   Enable the plugin in the `build.sbt`. By default this will use the native debian packaging implementation
+  *   [[com.typesafe.sbt.packager.debian.DebianNativePackaging]].
+  *   {{{
   *    enablePlugins(DebianPlugin)
-  * }}}
+  *   }}}
   */
 object DebianPlugin extends AutoPlugin with DebianNativePackaging {
 
@@ -44,7 +45,7 @@ object DebianPlugin extends AutoPlugin with DebianNativePackaging {
     val DebianSource = "debian"
     val DebianMaintainerScripts = "DEBIAN"
 
-    //maintainer script names
+    // maintainer script names
     val Postinst = "postinst"
     val Postrm = "postrm"
     val Prerm = "prerm"
@@ -80,23 +81,23 @@ object DebianPlugin extends AutoPlugin with DebianNativePackaging {
       debianPackageProvides := Seq.empty,
       debianPackageRecommends := Seq.empty,
       debianSignRole := "builder",
-      target in Debian := target.value / ((name in Debian).value + "-" + (version in Debian).value),
-      name in Debian := (name in Linux).value,
-      maintainerScripts in Debian := (maintainerScripts in Linux).value,
-      packageName in Debian := (packageName in Linux).value,
-      executableScriptName in Debian := (executableScriptName in Linux).value,
-      version in Debian := (version in Linux).value,
-      linuxPackageMappings in Debian := linuxPackageMappings.value,
-      packageDescription in Debian := (packageDescription in Linux).value,
-      packageSummary in Debian := (packageSummary in Linux).value,
-      maintainer in Debian := (maintainer in Linux).value,
-      validatePackageValidators in Debian := Seq(
-        nonEmptyMappings((linuxPackageMappings in Debian).value.flatMap(_.mappings)),
-        filesExist((linuxPackageMappings in Debian).value.flatMap(_.mappings)),
-        checkMaintainer((maintainer in Debian).value, asWarning = false)
+      Debian / target := target.value / ((Debian / name).value + "-" + (Debian / version).value),
+      Debian / name := (Linux / name).value,
+      Debian / maintainerScripts := (Linux / maintainerScripts).value,
+      Debian / packageName := (Linux / packageName).value,
+      Debian / executableScriptName := (Linux / executableScriptName).value,
+      Debian / version := (Linux / version).value,
+      Debian / linuxPackageMappings := linuxPackageMappings.value,
+      Debian / packageDescription := (Linux / packageDescription).value,
+      Debian / packageSummary := (Linux / packageSummary).value,
+      Debian / maintainer := (Linux / maintainer).value,
+      Debian / validatePackageValidators := Seq(
+        nonEmptyMappings((Debian / linuxPackageMappings).value.flatMap(_.mappings)),
+        filesExist((Debian / linuxPackageMappings).value.flatMap(_.mappings)),
+        checkMaintainer((Debian / maintainer).value, asWarning = false)
       ),
       // override the linux sourceDirectory setting
-      sourceDirectory in Debian := sourceDirectory.value,
+      Debian / sourceDirectory := sourceDirectory.value,
       /* ==== Debian configuration settings ==== */
       debianControlScriptsDirectory := (sourceDirectory.value / "debian" / Names.DebianMaintainerScripts),
       debianMaintainerScripts := Seq.empty,
@@ -106,8 +107,8 @@ object DebianPlugin extends AutoPlugin with DebianNativePackaging {
       debianMakePostrmScript := None,
       debianChangelog := None,
       /* === new debian scripts implementation */
-      maintainerScripts in Debian := {
-        val replacements = (linuxScriptReplacements in Debian).value
+      Debian / maintainerScripts := {
+        val replacements = (Debian / linuxScriptReplacements).value
         val scripts = Map(
           Names.Prerm -> defaultMaintainerScript(Names.Prerm).toSeq.flatten,
           Names.Preinst -> defaultMaintainerScript(Names.Preinst).toSeq.flatten,
@@ -118,9 +119,8 @@ object DebianPlugin extends AutoPlugin with DebianNativePackaging {
         // this is for legacy purposes to keep old behaviour
         // --- legacy starts
         def readContent(scriptFiles: Seq[(File, String)]): Map[String, Seq[String]] =
-          scriptFiles.map {
-            case (scriptFile, scriptName) =>
-              scriptName -> IO.readLines(scriptFile)
+          scriptFiles.map { case (scriptFile, scriptName) =>
+            scriptName -> IO.readLines(scriptFile)
           }.toMap
 
         val userProvided = readContent(
@@ -133,9 +133,8 @@ object DebianPlugin extends AutoPlugin with DebianNativePackaging {
         )
 
         // these things get appended. Don't check for nonexisting keys as they are already in the default scripts map
-        val appendedScripts = scripts.map {
-          case (scriptName, content) =>
-            scriptName -> (content ++ userProvided.getOrElse(scriptName, Nil))
+        val appendedScripts = scripts.map { case (scriptName, content) =>
+          scriptName -> (content ++ userProvided.getOrElse(scriptName, Nil))
         }
         // override and merge with the user defined scripts. Will change in the future
         val controlScriptsDir = debianControlScriptsDirectory.value
@@ -158,15 +157,15 @@ object DebianPlugin extends AutoPlugin with DebianNativePackaging {
         }
       },
       debianMaintainerScripts := generateDebianMaintainerScripts(
-        (maintainerScripts in Debian).value,
-        (linuxScriptReplacements in Debian).value,
-        (target in Universal).value
+        (Debian / maintainerScripts).value,
+        (Debian / linuxScriptReplacements).value,
+        (Universal / target).value
       ),
       debianNativeBuildOptions := Nil
     )
 
   /**
-    * == Debian scoped settings ==
+    * ==Debian scoped settings==
     * Everything used inside the debian scope
     */
   private def debianSettings: Seq[Setting[_]] =
@@ -230,8 +229,8 @@ object DebianPlugin extends AutoPlugin with DebianNativePackaging {
   private[this] def createConfFile(meta: PackageMetaData, size: Long, targetDir: File): File = {
     val description = Option(meta.info.description).filterNot(_.isEmpty)
     if (description.isEmpty)
-      sys.error("""packageDescription in Debian cannot be empty. Use
-                 packageDescription in Debian := "My package Description"""")
+      sys.error("""Debian / packageDescription cannot be empty. Use
+                 Debian / packageDescription := "My package Description"""")
     val cfile = targetDir / Names.DebianMaintainerScripts / Names.Control
     IO.write(cfile, meta.makeContent(size), java.nio.charset.Charset.defaultCharset)
     chmod(cfile, "0644")
@@ -268,27 +267,25 @@ object DebianPlugin extends AutoPlugin with DebianNativePackaging {
   }
 
   private[this] def stageMappings(mappings: Seq[LinuxPackageMapping], targetDir: File) =
-    mappings.foreach {
-      case LinuxPackageMapping(paths, perms, zipped) =>
-        val (dirs, files) = paths.partition(_._1.isDirectory)
-        dirs map {
-          case (_, dirName) => targetDir / dirName
-        } foreach { targetDir =>
-          targetDir mkdirs ()
-          chmod(targetDir, perms.permissions)
-        }
+    mappings.foreach { case LinuxPackageMapping(paths, perms, zipped) =>
+      val (dirs, files) = paths.partition(_._1.isDirectory)
+      dirs map { case (_, dirName) =>
+        targetDir / dirName
+      } foreach { targetDir =>
+        targetDir mkdirs ()
+        chmod(targetDir, perms.permissions)
+      }
 
-        files map {
-          case (file, fileName) => (file, targetDir / fileName)
-        } foreach {
-          case (source, destination) =>
-            copyAndFixPerms(source, destination, perms, zipped)
-        }
+      files map { case (file, fileName) =>
+        (file, targetDir / fileName)
+      } foreach { case (source, destination) =>
+        copyAndFixPerms(source, destination, perms, zipped)
+      }
     }
 
   /**
-    * Put the maintainer files in `dir / "DEBIAN"` named as specified.
-    * Valid values for the name are preinst,postinst,prerm,postrm
+    * Put the maintainer files in `dir / "DEBIAN"` named as specified. Valid values for the name are
+    * preinst,postinst,prerm,postrm
     *
     * @param maintainerScripts
     * @param targetDir
@@ -307,13 +304,11 @@ object DebianPlugin extends AutoPlugin with DebianNativePackaging {
 }
 
 /**
-  * == Debian Helper Methods ==
+  * ==Debian Helper Methods==
   *
-  * This trait provides a set of helper methods for debian packaging
-  * implementations.
+  * This trait provides a set of helper methods for debian packaging implementations.
   *
-  * Most of the methods are for java 6 file permission handling and
-  * debian script adjustements.
+  * Most of the methods are for java 6 file permission handling and debian script adjustements.
   */
 trait DebianPluginLike {
 
@@ -325,13 +320,12 @@ trait DebianPluginLike {
     replacements: Seq[(String, String)],
     tmpDir: File
   ): Seq[(File, String)] =
-    scripts.map {
-      case (scriptName, content) =>
-        val scriptBits =
-          TemplateWriter.generateScriptFromLines(content, replacements)
-        val script = tmpDir / "tmp" / "debian" / scriptName
-        IO.write(script, scriptBits mkString "\n")
-        script -> scriptName
+    scripts.map { case (scriptName, content) =>
+      val scriptBits =
+        TemplateWriter.generateScriptFromLines(content, replacements)
+      val script = tmpDir / "tmp" / "debian" / scriptName
+      IO.write(script, scriptBits mkString "\n")
+      script -> scriptName
     }.toList
 
   private[debian] final def defaultMaintainerScript(name: String): Option[List[String]] = {
@@ -416,16 +410,17 @@ trait DebianPluginLike {
     }
 
   /**
-    * Debian assumes the application chowns the necessary files and directories in the
-    * control scripts (Pre/Postinst).
+    * Debian assumes the application chowns the necessary files and directories in the control scripts (Pre/Postinst).
     *
-    * This method generates a replacement which can be inserted in bash script to chown
-    * all files which are not root. While adding the chown commands it checks if the users
-    * and groups have valid names.
+    * This method generates a replacement which can be inserted in bash script to chown all files which are not root.
+    * While adding the chown commands it checks if the users and groups have valid names.
     *
-    * @param mappings - all mapped files
-    * @param streams - logging
-    * @return (CHOWN_REPLACEMENT -> ".. list of chown commands")
+    * @param mappings
+    *   all mapped files
+    * @param streams
+    *   logging
+    * @return
+    *   (CHOWN_REPLACEMENT -> ".. list of chown commands")
     */
   private[debian] def makeChownReplacements(
     mappings: Seq[LinuxPackageMapping],
@@ -444,18 +439,16 @@ trait DebianPluginLike {
           false
         case _ => true
       }
-      .map {
-        case LinuxPackageMapping(paths, meta, _) =>
-          (meta.user, meta.group) -> paths
+      .map { case LinuxPackageMapping(paths, meta, _) =>
+        (meta.user, meta.group) -> paths
       }
       .groupBy(_._1)
-      .map {
-        case ((user, group), pathList) =>
-          validateUserGroupNames(user, streams)
-          validateUserGroupNames(group, streams)
-          val chown = chownCmd(user, group) _
-          // remove key, flatten it and then use mapping path (_.2) to create chown command
-          pathList.flatMap(_._2).map(m => chown(m._2))
+      .map { case ((user, group), pathList) =>
+        validateUserGroupNames(user, streams)
+        validateUserGroupNames(group, streams)
+        val chown = chownCmd(user, group) _
+        // remove key, flatten it and then use mapping path (_.2) to create chown command
+        pathList.flatMap(_._2).map(m => chown(m._2))
       }
     val replacement = header :: chowns.flatten.toList mkString "\n"
     DebianPlugin.CHOWN_REPLACEMENT -> replacement
@@ -475,6 +468,6 @@ object DebianDeployPlugin extends AutoPlugin {
   override def requires = DebianPlugin
 
   override def projectSettings: Seq[Setting[_]] =
-    SettingsHelper.makeDeploymentSettings(Debian, packageBin in Debian, "deb") ++
-      SettingsHelper.addPackage(Debian, genChanges in Debian, "changes")
+    SettingsHelper.makeDeploymentSettings(Debian, Debian / packageBin, "deb") ++
+      SettingsHelper.addPackage(Debian, Debian / genChanges, "changes")
 }

@@ -9,13 +9,13 @@ import com.typesafe.sbt.packager.universal.UniversalPlugin
 import com.typesafe.sbt.packager.archetypes.TemplateWriter
 
 /**
-  * Plugin containing all the generic values used for
-  * packaging linux software.
+  * Plugin containing all the generic values used for packaging linux software.
   *
-  * @example Enable the plugin in the `build.sbt`
-  * {{{
+  * @example
+  *   Enable the plugin in the `build.sbt`
+  *   {{{
   *    enablePlugins(LinuxPlugin)
-  * }}}
+  *   }}}
   */
 object LinuxPlugin extends AutoPlugin {
 
@@ -47,27 +47,28 @@ object LinuxPlugin extends AutoPlugin {
     Seq(
       linuxPackageMappings := Seq.empty,
       linuxPackageSymlinks := Seq.empty,
-      sourceDirectory in Linux := sourceDirectory.value / "linux",
+      Linux / sourceDirectory := sourceDirectory.value / "linux",
       generateManPages := {
         val log = streams.value.log
-        for (file <- ((sourceDirectory in Linux).value / "usr/share/man/man1" ** "*.1").get) {
+        for (file <- ((Linux / sourceDirectory).value / "usr/share/man/man1" ** "*.1").get) {
           val man = makeMan(file)
           log.info("Generated man page for[" + file + "] =")
           log.info(man)
         }
       },
-      packageSummary in Linux := packageSummary.value,
-      packageDescription in Linux := packageDescription.value,
-      name in Linux := name.value,
-      packageName in Linux := packageName.value,
-      executableScriptName in Linux := executableScriptName.value,
-      daemonUser := (packageName in Linux).value,
-      daemonUser in Linux := daemonUser.value,
-      daemonUserUid in Linux := None,
-      daemonGroup := (daemonUser in Linux).value,
-      daemonGroup in Linux := daemonGroup.value,
-      daemonGroupGid in Linux := None,
-      daemonShell in Linux := "/bin/false",
+      Linux / packageSummary := packageSummary.value,
+      Linux / packageDescription := packageDescription.value,
+      Linux / name := name.value,
+      Linux / packageName := packageName.value,
+      Linux / executableScriptName := executableScriptName.value,
+      daemonUser := (Linux / packageName).value,
+      Linux / daemonUser := daemonUser.value,
+      Linux / daemonUserUid := None,
+      daemonGroup := (Linux / daemonUser).value,
+      Linux / daemonGroup := daemonGroup.value,
+      Linux / daemonGroupGid := None,
+      Linux / daemonShell := "/bin/false",
+      Linux / daemonHome := s"/var/lib/${(Linux / daemonUser).value}",
       defaultLinuxInstallLocation := "/usr/share",
       defaultLinuxLogsLocation := "/var/log",
       defaultLinuxConfigLocation := "/etc",
@@ -81,48 +82,48 @@ object LinuxPlugin extends AutoPlugin {
       killTimeout := 10,
       // Default linux bashscript replacements
       linuxScriptReplacements := makeReplacements(
-        author = (maintainer in Linux).value,
-        description = (packageSummary in Linux).value,
-        execScript = (executableScriptName in Linux).value,
-        chdir = chdir(defaultLinuxInstallLocation.value, (packageName in Linux).value),
+        author = (Linux / maintainer).value,
+        description = (Linux / packageSummary).value,
+        execScript = (Linux / executableScriptName).value,
+        chdir = chdir(defaultLinuxInstallLocation.value, (Linux / packageName).value),
         logdir = defaultLinuxLogsLocation.value,
-        appName = (packageName in Linux).value,
+        appName = (Linux / packageName).value,
         version = sbt.Keys.version.value,
-        daemonUser = (daemonUser in Linux).value,
-        daemonUserUid = (daemonUserUid in Linux).value,
-        daemonGroup = (daemonGroup in Linux).value,
-        daemonGroupGid = (daemonGroupGid in Linux).value,
-        daemonShell = (daemonShell in Linux).value,
-        fileDescriptorLimit = (fileDescriptorLimit in Linux).value
+        daemonUser = (Linux / daemonUser).value,
+        daemonUserUid = (Linux / daemonUserUid).value,
+        daemonGroup = (Linux / daemonGroup).value,
+        daemonGroupGid = (Linux / daemonGroupGid).value,
+        daemonShell = (Linux / daemonShell).value,
+        daemonHome = (Linux / daemonHome).value,
+        fileDescriptorLimit = (Linux / fileDescriptorLimit).value
       ),
       linuxScriptReplacements += controlScriptFunctionsReplacement( /* Add key for control-functions */ ),
-      maintainerScripts in Linux := Map.empty
+      Linux / maintainerScripts := Map.empty
     )
 
   /**
-    * maps the `mappings` content into `linuxPackageMappings` and
-    * `linuxPackageSymlinks`.
+    * maps the `mappings` content into `linuxPackageMappings` and `linuxPackageSymlinks`.
     */
   def mapGenericFilesToLinux: Seq[Setting[_]] =
     Seq(
       // First we look at the src/linux files
       linuxPackageMappings ++= {
-        val linuxContent = MappingsHelper.contentOf((sourceDirectory in Linux).value)
+        val linuxContent = MappingsHelper.contentOf((Linux / sourceDirectory).value)
         if (linuxContent.isEmpty) Seq.empty
         else mapGenericMappingsToLinux(linuxContent, Users.Root, Users.Root)(identity)
       },
       // Now we look at the src/universal files.
       linuxPackageMappings ++= getUniversalFolderMappings(
-        (packageName in Linux).value,
+        (Linux / packageName).value,
         defaultLinuxInstallLocation.value,
-        (mappings in Universal).value
+        (Universal / mappings).value
       ),
       // Now we generate symlinks.
       linuxPackageSymlinks ++= {
         val installLocation = defaultLinuxInstallLocation.value
-        val linuxPackageName = (packageName in Linux).value
+        val linuxPackageName = (Linux / packageName).value
         for {
-          (file, name) <- (mappings in Universal).value
+          (file, name) <- (Universal / mappings).value
           if !file.isDirectory
           if name startsWith "bin/"
           if !(name endsWith ".bat") // IGNORE windows-y things.
@@ -130,13 +131,12 @@ object LinuxPlugin extends AutoPlugin {
       },
       // Map configuration files
       linuxPackageSymlinks ++= {
-        val linuxPackageName = (packageName in Linux).value
+        val linuxPackageName = (Linux / packageName).value
         val installLocation = defaultLinuxInstallLocation.value
         val configLocation = defaultLinuxConfigLocation.value
         val needsConfLink =
-          (mappings in Universal).value exists {
-            case (file, destination) =>
-              (destination startsWith "conf/") && !file.isDirectory
+          (Universal / mappings).value exists { case (file, destination) =>
+            (destination startsWith "conf/") && !file.isDirectory
           }
         if (needsConfLink)
           Seq(
@@ -162,6 +162,7 @@ object LinuxPlugin extends AutoPlugin {
     daemonGroup: String,
     daemonGroupGid: Option[String],
     daemonShell: String,
+    daemonHome: String,
     fileDescriptorLimit: Option[String]
   ): Seq[(String, String)] =
     Seq(
@@ -177,14 +178,15 @@ object LinuxPlugin extends AutoPlugin {
       "daemon_group" -> daemonGroup,
       "daemon_group_gid" -> daemonGroupGid.getOrElse(""),
       "daemon_shell" -> daemonShell,
+      "daemon_home" -> daemonHome,
       "file_descriptor_limit" -> fileDescriptorLimit.getOrElse("")
     )
 
   /**
-    * Load the default controlscript functions which contain
-    * addUser/removeUser/addGroup/removeGroup
+    * Load the default controlscript functions which contain addUser/removeUser/addGroup/removeGroup
     *
-    * @return placeholder->content
+    * @return
+    *   placeholder->content
     */
   def controlScriptFunctionsReplacement(template: Option[URL] = None): (String, String) = {
     val url = template getOrElse LinuxPlugin.controlFunctions
@@ -206,23 +208,23 @@ object LinuxPlugin extends AutoPlugin {
   /**
     * Maps linux file format from the universal from the conventions:
     *
-    * `<project>/src/linux` files are mapped directly into linux packages.
-    * `<universal>` files are placed under `/usr/share/<package-name>`
-    * `<universal>/bin` files are given symlinks in `/usr/bin`
-    * `<universal>/conf` directory is given a symlink to `/etc/<package-name>`
-    * Files in `conf/` or `etc/` directories are automatically marked as configuration.
-    * `../man/...1` files are automatically compressed into .gz files.
+    *   - `<project>/src/linux` files are mapped directly into linux packages.
+    *   - `<universal>` files are placed under `/usr/share/<package-name>`
+    *   - `<universal>/bin` files are given symlinks in `/usr/bin`
+    *   - `<universal>/conf` directory is given a symlink to `/etc/<package-name>`
+    *   - Files in `conf/` or `etc/` directories are automatically marked as configuration.
+    *   - `../man/...1` files are automatically compressed into .gz files.
     */
   def mapGenericMappingsToLinux(mappings: Seq[(File, String)], user: String, group: String)(
     rename: String => String
   ): Seq[LinuxPackageMapping] = {
     val (directories, nondirectories) = mappings.partition(_._1.isDirectory)
-    val (configFiles, nonConfigFiles) = nondirectories partition {
-      case (_, destination) => (destination contains "etc/") || (destination contains "conf/")
+    val (configFiles, nonConfigFiles) = nondirectories partition { case (_, destination) =>
+      (destination contains "etc/") || (destination contains "conf/")
     }
     val (binaries, nonbinaries) = nonConfigFiles.partition(_._1.canExecute)
-    val (manPages, remaining) = nonbinaries partition {
-      case (_, destination) => (destination contains "man/") && (destination endsWith ".1")
+    val (manPages, remaining) = nonbinaries partition { case (_, destination) =>
+      (destination contains "man/") && (destination endsWith ".1")
     }
     val compressedManPages =
       for ((file, name) <- manPages)

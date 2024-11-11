@@ -5,12 +5,17 @@ import sbt._
 /**
   * Keys related to the [[BatStartScriptPlugin]]
   *
-  * @see [[BatStartScriptPlugin]]
+  * @see
+  *   [[BatStartScriptPlugin]]
   */
 trait BatStartScriptKeys {
   val makeBatScripts = TaskKey[Seq[(File, String)]]("makeBatScripts", "Creates start scripts for this project.")
   val batScriptTemplateLocation =
     TaskKey[File]("batScriptTemplateLocation", "The location of the bat script template.")
+
+  val batForwarderTemplateLocation =
+    TaskKey[Option[File]]("batForwarderTemplateLocation", "The location of the bat forwarder script template.")
+
   val batScriptReplacements = TaskKey[Seq[(String, String)]](
     "batScriptReplacements",
     """|Replacements of template parameters used in the windows bat script.

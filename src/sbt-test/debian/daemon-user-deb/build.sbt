@@ -1,9 +1,9 @@
 enablePlugins(JavaServerAppPackaging)
 
-daemonUser in Linux := "daemonuser"
-daemonGroup in Linux := "daemongroup"
+Linux / daemonUser := "daemonuser"
+Linux / daemonGroup := "daemongroup"
 
-mainClass in Compile := Some("empty")
+Compile / mainClass := Some("empty")
 
 name := "debian-test"
 version := "0.1.0"
@@ -19,7 +19,7 @@ TaskKey[Unit]("checkControlFiles") := {
   val postrm = IO.read(debian / "postrm")
   assert(postinst contains """addGroup daemongroup """"", "postinst misses addgroup for daemongroup: " + postinst)
   assert(
-    postinst contains """addUser daemonuser "" daemongroup "debian-test daemon-user" "/bin/false"""",
+    postinst contains """addUser daemonuser "" daemongroup "debian-test daemon-user" "/bin/false" "/var/lib/daemonuser""",
     "postinst misses useradd for daemonuser: " + postinst
   )
   assert(

@@ -35,7 +35,8 @@ trait CommonStartScriptGenerator {
 
   /**
     * Set executable bit of the generated scripts to this value
-    * @todo Does it work when building archives on hosts that do not support such permission?
+    * @todo
+    *   Does it work when building archives on hosts that do not support such permission?
     */
   protected[this] val executableBitValue: Boolean
 
@@ -50,14 +51,14 @@ trait CommonStartScriptGenerator {
     val scriptClasspath: Seq[String]
     val replacements: Seq[(String, String)]
     val templateLocation: File
+    val forwarderTemplateLocation: Option[File]
 
     def withScriptName(scriptName: String): SpecializedScriptConfig
   }
 
   /**
-    * The type of specialized ScriptConfig.
-    * This enables callback methods of the concrete plugin implementations
-    * to use fields of config that only exist in their ScriptConfig specialization.
+    * The type of specialized ScriptConfig. This enables callback methods of the concrete plugin implementations to use
+    * fields of config that only exist in their ScriptConfig specialization.
     */
   protected[this] type SpecializedScriptConfig <: ScriptConfig
 
@@ -89,21 +90,33 @@ trait CommonStartScriptGenerator {
   ): Seq[(File, String)] = {
     val classAndScriptNames = ScriptUtils.createScriptNames(discoveredMainClasses)
     ScriptUtils.warnOnScriptNameCollision(classAndScriptNames, log)
-    classAndScriptNames.map {
-      case (qualifiedClassName, scriptName) =>
+
+    classAndScriptNames
+      .find { case (_, script) =>
+        script == config.executableScriptName
+      }
+      .map(_ => classAndScriptNames)
+      .getOrElse(
+        classAndScriptNames ++ Seq("" -> config.executableScriptName)
+      ) // empty string to enforce the custom class in scripts
+      .map { case (qualifiedClassName, scriptName) =>
         val newConfig = config.withScriptName(scriptName)
         createMainScript(qualifiedClassName, newConfig, targetDir, discoveredMainClasses)
-    }
+      }
   }
 
   private[this] def mainScriptName(config: ScriptConfig): String =
     config.executableScriptName + scriptSuffix
 
   /**
-    * @param mainClass - Main class added to the java command
-    * @param config - Config data for this script
-    * @param targetDir - Target directory for this script
-    * @return File pointing to the created main script
+    * @param mainClass
+    *   Main class added to the java command
+    * @param config
+    *   Config data for this script
+    * @param targetDir
+    *   Target directory for this script
+    * @return
+    *   File pointing to the created main script
     */
   private[this] def createMainScript(
     mainClass: String,
@@ -123,9 +136,9 @@ trait CommonStartScriptGenerator {
     script -> s"$scriptTargetFolder/$scriptNameWithSuffix"
   }
 
-  private[this] def resolveTemplate(defaultTemplateLocation: File): URL =
-    if (defaultTemplateLocation.exists) defaultTemplateLocation.toURI.toURL
-    else getClass.getResource(defaultTemplateLocation.getName)
+  private[this] def resolveTemplate(templateLocation: File): URL =
+    if (templateLocation.exists) templateLocation.toURI.toURL
+    else getClass.getResource(templateLocation.getName)
 
   private[this] def createForwarderScripts(
     executableScriptName: String,
@@ -135,20 +148,20 @@ trait CommonStartScriptGenerator {
     log: sbt.Logger
   ): Seq[(File, String)] = {
     val tmp = targetDir / scriptTargetFolder
-    val forwarderTemplate = getClass.getResource(forwarderTemplateName)
+    val forwarderTemplate =
+      config.forwarderTemplateLocation.map(resolveTemplate).getOrElse(getClass.getResource(forwarderTemplateName))
     val classAndScriptNames = ScriptUtils.createScriptNames(discoveredMainClasses)
     ScriptUtils.warnOnScriptNameCollision(classAndScriptNames :+ ("<main script>" -> mainScriptName(config)), log)
-    classAndScriptNames.map {
-      case (qualifiedClassName, scriptNameWithoutSuffix) =>
-        val scriptName = scriptNameWithoutSuffix + scriptSuffix
-        val file = tmp / scriptName
+    classAndScriptNames.map { case (qualifiedClassName, scriptNameWithoutSuffix) =>
+      val scriptName = scriptNameWithoutSuffix + scriptSuffix
+      val file = tmp / scriptName
 
-        val replacements = Seq("startScript" -> executableScriptName, "qualifiedClassName" -> qualifiedClassName)
-        val scriptContent = TemplateWriter.generateScript(forwarderTemplate, replacements, eol, keySurround)
+      val replacements = Seq("startScript" -> executableScriptName, "qualifiedClassName" -> qualifiedClassName)
+      val scriptContent = TemplateWriter.generateScript(forwarderTemplate, replacements, eol, keySurround)
 
-        IO.write(file, scriptContent)
-        file.setExecutable(executableBitValue)
-        file -> s"$scriptTargetFolder/$scriptName"
+      IO.write(file, scriptContent)
+      file.setExecutable(executableBitValue)
+      file -> s"$scriptTargetFolder/$scriptName"
     }
   }
 }

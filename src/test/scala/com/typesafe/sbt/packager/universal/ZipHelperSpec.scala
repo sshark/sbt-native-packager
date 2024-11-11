@@ -7,8 +7,10 @@ import java.io.File
 import java.nio.file.{Files, Path, Paths}
 import java.nio.file.attribute.PosixFilePermission._
 import scala.collection.JavaConversions._
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
-class ZipHelperSpec extends WordSpec with Matchers with BeforeAndAfterEach with BeforeAndAfterAll {
+class ZipHelperSpec extends AnyWordSpec with Matchers with BeforeAndAfterEach with BeforeAndAfterAll {
 
   var tmp: Path = _
   val toDelete = scala.collection.mutable.ListBuffer[Path]()
@@ -31,8 +33,7 @@ class ZipHelperSpec extends WordSpec with Matchers with BeforeAndAfterEach with 
       zipSingleFile(ZipHelper.zip)
     }
 
-    // ignores empty directories
-    "create a zip with nested directories" taggedAs (LinuxTag, WindowsTag) ignore {
+    "create a zip with nested directories" taggedAs (LinuxTag, WindowsTag) in {
       zipNestedFile(ZipHelper.zip)
     }
 
@@ -182,7 +183,15 @@ class ZipHelperSpec extends WordSpec with Matchers with BeforeAndAfterEach with 
     Files.setPosixFilePermissions(exec, permissions("0755"))
 
     val perms = Files getPosixFilePermissions exec
-    perms should contain only (OWNER_READ, OWNER_WRITE, OWNER_EXECUTE, GROUP_READ, GROUP_EXECUTE, OTHERS_READ, OTHERS_EXECUTE)
+    perms should contain only (
+      OWNER_READ,
+      OWNER_WRITE,
+      OWNER_EXECUTE,
+      GROUP_READ,
+      GROUP_EXECUTE,
+      OTHERS_READ,
+      OTHERS_EXECUTE
+    )
 
     zipper(List(exec.toFile -> "exec"), out.toFile)
     Files exists out should be(true)
@@ -197,7 +206,15 @@ class ZipHelperSpec extends WordSpec with Matchers with BeforeAndAfterEach with 
 
     // checking permissions
     val unzippedPerms = Files getPosixFilePermissions unzipped
-    unzippedPerms should contain only (OWNER_READ, OWNER_WRITE, OWNER_EXECUTE, GROUP_READ, GROUP_EXECUTE, OTHERS_READ, OTHERS_EXECUTE)
+    unzippedPerms should contain only (
+      OWNER_READ,
+      OWNER_WRITE,
+      OWNER_EXECUTE,
+      GROUP_READ,
+      GROUP_EXECUTE,
+      OTHERS_READ,
+      OTHERS_EXECUTE
+    )
   }
 
 }

@@ -56,7 +56,7 @@ Add the following to your `project/plugins.sbt` file:
 
 ```scala
 // for autoplugins
-addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.9.4")
+addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "<version>")
 ```
 
 In your `build.sbt` enable the plugin you want. For example the
@@ -77,26 +77,26 @@ If you have enabled one of the archetypes (app or server),
 you can build your application with
 
 ```bash
-sbt <config-scope>:packageBin
+sbt <config-scope>/packageBin
 ```
 
 ### Examples
 
 ```bash
 # universal zip
-sbt universal:packageBin
+sbt Universal/packageBin
 
 # debian package
-sbt debian:packageBin
+sbt Debian/packageBin
 
 # rpm package
-sbt rpm:packageBin
+sbt Rpm/packageBin
 
 # docker image
-sbt docker:publishLocal
+sbt Docker/publishLocal
 
 # graalvm image
-sbt graalvm-native-image:packageBin
+sbt GraalVMNativeImage/packageBin
 ```
 
 Read more in the specific [format documentation][formats] on how to configure and build your package.

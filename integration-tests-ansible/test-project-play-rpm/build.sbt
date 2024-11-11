@@ -1,16 +1,6 @@
 scalaVersion in ThisBuild := "2.11.6"
 
-scalacOptions in ThisBuild ++= Seq(
-  "-deprecation",
-  "-encoding",
-  "UTF-8",
-  "-feature",
-  "-unchecked",
-  "-Xfuture",
-  "-Xlint"
-)
-
-resolvers in ThisBuild += Resolver.typesafeRepo("releases")
+scalacOptions in ThisBuild ++= Seq("-deprecation", "-encoding", "UTF-8", "-feature", "-unchecked", "-Xfuture", "-Xlint")
 
 name := "test-project-play-rpm"
 

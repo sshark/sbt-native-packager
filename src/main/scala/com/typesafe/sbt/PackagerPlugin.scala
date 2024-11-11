@@ -8,24 +8,20 @@ import sbt._
 import sbt.Keys.{name, normalizedName, packageBin, streams}
 
 /**
-  * == SBT Native Packager Plugin ==
+  * ==SBT Native Packager Plugin==
   *
-  * This is the top level plugin for the sbt native packager.
-  * You don't have to enable this by yourself, instead we recommend
-  * using an archetype for this.
+  * This is the top level plugin for the sbt native packager. You don't have to enable this by yourself, instead we
+  * recommend using an archetype for this.
   *
   * Currently you can choose between
   *
-  * <ul>
-  * <li>JavaAppPackaging</li>
-  * <li>JavaServerPackaging</li>
-  * <li>AkkaAppPackging</li>
-  * </ul>
+  *   - JavaAppPackaging
+  *   - JavaServerPackaging
+  *   - AkkaAppPackging
   *
-  * == Configuration ==
+  * ==Configuration==
   *
-  * The are a few settings you should set if you want to build package
-  * no matter what format.
+  * The are a few settings you should set if you want to build package no matter what format.
   *
   * {{{
   * maintainer := "Your name <your.name@your-company.org>"
@@ -34,10 +30,11 @@ import sbt.Keys.{name, normalizedName, packageBin, streams}
   *
   * For all other general settings take a look at [[com.typesafe.sbt.packager.NativePackagerKeys]]
   *
-  * @example Enable the plugin in the `build.sbt`
-  * {{{
+  * @example
+  *   Enable the plugin in the `build.sbt`
+  *   {{{
   *    enablePlugins(SbtNativePackager)
-  * }}}
+  *   }}}
   */
 object SbtNativePackager extends AutoPlugin {
 
@@ -56,16 +53,16 @@ object SbtNativePackager extends AutoPlugin {
   /**
     * imports all [[com.typesafe.sbt.packager.NativePackagerKeys]] and two objects:
     *
-    * === NativePackagerKeys ===
+    * ===NativePackagerKeys===
     *
-    * This inclues ''all'' available keys provided by the sbt-native-packager.
-    * Used it if a setting/task key is not in scope.
+    * This inclues ''all'' available keys provided by the sbt-native-packager. Used it if a setting/task key is not in
+    * scope.
     *
     * {{{
     * NativePackagerKeys.notAutomaticallyImported := "cool!"
     * }}}
     *
-    * === NativePackagerHelper ===
+    * ===NativePackagerHelper===
     *
     * This object contains a set of helper methods for working with mappings.
     */
@@ -78,14 +75,14 @@ object SbtNativePackager extends AutoPlugin {
 
     @deprecated("Use enablePlugins(xxxDeployPlugin)", "1.x")
     def deploymentSettings =
-      makeDeploymentSettings(Debian, packageBin in Debian, "deb") ++
-        makeDeploymentSettings(Rpm, packageBin in Rpm, "rpm") ++
-        makeDeploymentSettings(Windows, packageBin in Windows, "msi") ++
-        makeDeploymentSettings(Universal, packageBin in Universal, "zip") ++
-        addPackage(Universal, packageZipTarball in Universal, "tgz") ++
-        makeDeploymentSettings(UniversalDocs, packageBin in UniversalDocs, "zip") ++
-        addPackage(UniversalDocs, packageXzTarball in UniversalDocs, "txz") ++
-        makeDeploymentSettings(Debian, genChanges in Debian, "changes")
+      makeDeploymentSettings(Debian, Debian / packageBin, "deb") ++
+        makeDeploymentSettings(Rpm, Rpm / packageBin, "rpm") ++
+        makeDeploymentSettings(Windows, Windows / packageBin, "msi") ++
+        makeDeploymentSettings(Universal, Universal / packageBin, "zip") ++
+        addPackage(Universal, Universal / packageZipTarball, "tgz") ++
+        makeDeploymentSettings(UniversalDocs, UniversalDocs / packageBin, "zip") ++
+        addPackage(UniversalDocs, UniversalDocs / packageXzTarball, "txz") ++
+        makeDeploymentSettings(Debian, Debian / genChanges, "changes")
   }
 
   import autoImport._
@@ -106,7 +103,7 @@ object SbtNativePackager extends AutoPlugin {
   object packageArchetype {
 
     /**
-      * == Recommended usage ==
+      * ==Recommended usage==
       *
       * {{{
       * enablePlugins(JavaAppPackaging)

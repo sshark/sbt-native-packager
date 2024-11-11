@@ -11,7 +11,8 @@ import scala.xml.Elem
 /**
   * Helpers for working with Ant build definitions
   *
-  * @author <a href="mailto:fitch@datamininglab.com">Simeon H.K. Fitch</a>
+  * @author
+  *   <a href="mailto:fitch@datamininglab.com">Simeon H.K. Fitch</a>
   * @since 5/7/15
   */
 object JDKPackagerAntHelper {
@@ -38,11 +39,11 @@ object JDKPackagerAntHelper {
 
     // Unlift searchPoint `Option`-s, and for each base directory, add the parent variant to cover nested JREs on Unix.
     val entryPoints =
-      searchPoints.flatten.flatMap(f ⇒ Seq(f, f.getAbsoluteFile))
+      searchPoints.flatten.flatMap(f => Seq(f, f.getAbsoluteFile))
 
     // On Windows we're often running in the JRE and not the JDK. If JDK is installed,
     // it's likely to be in a parallel directory, with the "jre" prefix changed to "jdk"
-    val entryPointsSpecialCaseWindows = entryPoints.flatMap { f ⇒
+    val entryPointsSpecialCaseWindows = entryPoints.flatMap { f =>
       if (f.getName.startsWith("jre"))
         Seq(f, f.getParentFile / ("jdk" + f.getName.drop(3)))
       else Seq(f)
@@ -51,11 +52,11 @@ object JDKPackagerAntHelper {
     // Now search for the tool
     entryPointsSpecialCaseWindows
       .map(_ / "lib" / jarname)
-      .find { f ⇒
+      .find { f =>
         logger.debug(s"Looking for '$jarname' in  '${f.getParent}'");
         f.exists()
       }
-      .map { f ⇒
+      .map { f =>
         logger.debug(s"Found '$f'!"); f
       }
   }
@@ -183,9 +184,9 @@ object JDKPackagerAntHelper {
 
     if (antTaskLib.isEmpty)
       sys.error(
-        "Please set key `antPackagerTasks in JDKPackager` to `ant-javafx.jar` path, " +
+        "Please set key `JDKPackager / antPackagerTasks` to `ant-javafx.jar` path, " +
           "which should be found in the `lib` directory of the Oracle JDK 8 installation. For example (Windows):\n" +
-          """(antPackagerTasks in JDKPackager) := Some(file("C:\\Program Files\\Java\\jdk1.8.0_45\\lib\\ant-javafx.jar"))"""
+          """JDKPackager / antPackagerTasks := Some(file("C:\\Program Files\\Java\\jdk1.8.0_45\\lib\\ant-javafx.jar"))"""
       )
 
     val taskClassPath = antTaskLib.get +: antExtraClasspath
@@ -221,9 +222,11 @@ object JDKPackagerAntHelper {
 
   /**
     * Locate the generated packge.
-    * TODO: replace with something significantly more intelligent.
-    * @param output output directory
-    * @return generated file location
+    *   - TODO: replace with something significantly more intelligent.
+    * @param output
+    *   output directory
+    * @return
+    *   generated file location
     */
   private[jdkpackager] def findResult(output: File, s: TaskStreams): Option[File] = {
     // Oooof. Need to do better than this to determine what was generated.
@@ -231,7 +234,7 @@ object JDKPackagerAntHelper {
       Seq("*.dmg", "*.pkg", "*.app", "*.msi", "*.exe", "*.deb", "*.rpm")
     val finder = globs.foldLeft(PathFinder.empty)(_ +++ output ** _)
     val result = finder.getPaths.headOption
-    result.foreach(f ⇒ s.log.info("Wrote " + f))
+    result.foreach(f => s.log.info("Wrote " + f))
     result.map(file)
   }
 
@@ -246,7 +249,7 @@ object JDKPackagerAntHelper {
 
   /** Build package via Ant build.xml definition. */
   private[jdkpackager] def buildPackageWithAnt(buildXML: File, target: File, s: TaskStreams): File = {
-    import org.apache.tools.ant.{Project ⇒ AntProject}
+    import org.apache.tools.ant.{Project => AntProject}
 
     val ap = new AntProject
     ap.setUserProperty("ant.file", buildXML.getAbsolutePath)
@@ -266,7 +269,7 @@ object JDKPackagerAntHelper {
 
   /** For piping Ant messages to sbt logger. */
   private class AntLogAdapter(s: TaskStreams) extends BuildListener {
-    import org.apache.tools.ant.{Project ⇒ AntProject}
+    import org.apache.tools.ant.{Project => AntProject}
     def buildFinished(event: BuildEvent): Unit = ()
     def buildStarted(event: BuildEvent): Unit = ()
     def targetStarted(event: BuildEvent): Unit = ()
@@ -275,11 +278,11 @@ object JDKPackagerAntHelper {
     def taskStarted(event: BuildEvent): Unit = ()
     def messageLogged(event: BuildEvent): Unit =
       event.getPriority match {
-        case AntProject.MSG_ERR ⇒ s.log.error(event.getMessage)
-        case AntProject.MSG_WARN ⇒ s.log.warn(event.getMessage)
-        case AntProject.MSG_INFO ⇒ s.log.info(event.getMessage)
-        case AntProject.MSG_VERBOSE ⇒ s.log.verbose(event.getMessage)
-        case _ ⇒ s.log.debug(event.getMessage)
+        case AntProject.MSG_ERR     => s.log.error(event.getMessage)
+        case AntProject.MSG_WARN    => s.log.warn(event.getMessage)
+        case AntProject.MSG_INFO    => s.log.info(event.getMessage)
+        case AntProject.MSG_VERBOSE => s.log.verbose(event.getMessage)
+        case _                      => s.log.debug(event.getMessage)
       }
   }
 }

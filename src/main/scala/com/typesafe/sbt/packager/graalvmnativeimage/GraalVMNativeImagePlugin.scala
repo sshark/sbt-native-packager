@@ -14,10 +14,11 @@ import com.typesafe.sbt.packager.universal.UniversalPlugin
 /**
   * Plugin to compile ahead-of-time native executables.
   *
-  * @example Enable the plugin in the `build.sbt`
-  * {{{
+  * @example
+  *   Enable the plugin in the `build.sbt`
+  *   {{{
   *    enablePlugins(GraalVMNativeImagePlugin)
-  * }}}
+  *   }}}
   */
 object GraalVMNativeImagePlugin extends AutoPlugin {
 
@@ -34,12 +35,12 @@ object GraalVMNativeImagePlugin extends AutoPlugin {
   override def projectConfigurations: Seq[Configuration] = Seq(GraalVMNativeImage)
 
   override lazy val projectSettings: Seq[Setting[_]] = Seq(
-    target in GraalVMNativeImage := target.value / "graalvm-native-image",
+    GraalVMNativeImage / target := target.value / "graalvm-native-image",
     graalVMNativeImageOptions := Seq.empty,
     graalVMNativeImageGraalVersion := None,
     graalVMNativeImageCommand := (if (scala.util.Properties.isWin) "native-image.cmd" else "native-image"),
-    resourceDirectory in GraalVMNativeImage := sourceDirectory.value / "graal",
-    mainClass in GraalVMNativeImage := (mainClass in Compile).value
+    GraalVMNativeImage / resourceDirectory := sourceDirectory.value / "graal",
+    GraalVMNativeImage / mainClass := (Compile / mainClass).value
   ) ++ inConfig(GraalVMNativeImage)(scopedSettings)
 
   private lazy val scopedSettings = Seq[Setting[_]](
@@ -73,7 +74,7 @@ object GraalVMNativeImagePlugin extends AutoPlugin {
             className,
             classpathJars.map(_._1),
             extraOptions,
-            streams.log
+            UnbufferedProcessLogger(streams.log)
           )
 
         case Some(image) =>
@@ -139,18 +140,24 @@ object GraalVMNativeImagePlugin extends AutoPlugin {
 
     stage(targetDirectory, classpathJars, resources, streams)
 
+    val graalDestDir = "/opt/graalvm"
+    val stageDestDir = s"$graalDestDir/stage"
+    val resourcesDestDir = s"$stageDestDir/resources"
+
     val command = dockerCommand ++ Seq(
       "run",
+      "--workdir",
+      "/opt/graalvm",
       "--rm",
       "-v",
-      s"${targetDirectory.getAbsolutePath}:/opt/graalvm",
+      s"${targetDirectory.getAbsolutePath}:$graalDestDir",
       image,
       "-cp",
-      classpathJars.map(jar => "/opt/graalvm/stage/" + jar._2).mkString(":"),
+      (resourcesDestDir +: classpathJars.map(jar => s"$stageDestDir/" + jar._2)).mkString(":"),
       s"-H:Name=$binaryName"
     ) ++ extraOptions ++ Seq(className)
 
-    sys.process.Process(command) ! streams.log match {
+    sys.process.Process(command) ! UnbufferedProcessLogger(streams.log) match {
       case 0 => targetDirectory / binaryName
       case x => sys.error(s"Failed to run $command, exit status: " + x)
     }
@@ -160,14 +167,14 @@ object GraalVMNativeImagePlugin extends AutoPlugin {
     * This can be used to build a custom build image starting from a custom base image. Can be used like so:
     *
     * ```
-    * (containerBuildImage in GraalVMNativeImage) := generateContainerBuildImage("my-docker-hub-username/my-graalvm").value
+    * GraalVMNativeImage / containerBuildImage := generateContainerBuildImage("my-docker-hub-username/my-graalvm").value
     * ```
     *
     * The passed in docker image must have GraalVM installed and on the PATH, including the gu utility.
     */
   def generateContainerBuildImage(baseImage: String): Def.Initialize[Task[Option[String]]] =
     Def.task {
-      val dockerCommand = (DockerPlugin.autoImport.dockerExecCommand in GraalVMNativeImage).value
+      val dockerCommand = (GraalVMNativeImage / DockerPlugin.autoImport.dockerExecCommand).value
       val streams = Keys.streams.value
 
       val (baseName, tag) = baseImage.split(":", 2) match {
@@ -184,6 +191,7 @@ object GraalVMNativeImagePlugin extends AutoPlugin {
           Cmd("FROM", baseImage),
           Cmd("WORKDIR", "/opt/graalvm"),
           ExecCmd("RUN", "gu", "install", "native-image"),
+          ExecCmd("RUN", "sh", "-c", "ln -s /opt/graalvm-ce-*/bin/native-image /usr/local/bin/native-image"),
           ExecCmd("ENTRYPOINT", "native-image")
         ).makeContent
 
@@ -209,9 +217,17 @@ object GraalVMNativeImagePlugin extends AutoPlugin {
     streams: TaskStreams
   ): File = {
     val stageDir = targetDirectory / "stage"
-    val mappings = classpathJars ++ resources.map {
-      case (resource, path) => resource -> s"resources/$path"
+    val mappings = classpathJars ++ resources.map { case (resource, path) =>
+      resource -> s"resources/$path"
     }
     Stager.stage(GraalVMBaseImage)(streams, stageDir, mappings)
   }
+}
+
+private case class UnbufferedProcessLogger(logger: Logger) extends ProcessLogger {
+  override def out(s: => String): Unit = logger.out(s)
+
+  override def err(s: => String): Unit = logger.err(s)
+
+  override def buffer[T](f: => T): T = f
 }

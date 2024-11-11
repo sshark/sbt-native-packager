@@ -7,8 +7,8 @@ import sbt._
 trait ApplicationIniGenerator {
 
   /**
-    * @return the existing mappings plus a generated application.ini
-    *         if custom javaOptions are specified
+    * @return
+    *   the existing mappings plus a generated application.ini if custom javaOptions are specified
     */
   def generateApplicationIni(
     universalMappings: Seq[(File, String)],
@@ -22,7 +22,7 @@ trait ApplicationIniGenerator {
         case location if javaOptions.nonEmpty =>
           val configFile = tmpDir / "tmp" / "conf" / "application.ini"
           val pathMapping = cleanApplicationIniPath(location)
-          //Do not use writeLines here because of issue #637
+          // Do not use writeLines here because of issue #637
           IO.write(configFile, ("# options from build" +: javaOptions).mkString("\n"))
           val filteredMappings = universalMappings.filter {
             case (`configFile`, `pathMapping`) =>
@@ -35,7 +35,7 @@ trait ApplicationIniGenerator {
               // TODO: merge JVM options into the existing application.ini?
               log.warn("--------!!! JVM Options are defined twice !!!-----------")
               log.warn(
-                "application.ini is already present in output package. Will be overridden by 'javaOptions in Universal'"
+                "application.ini is already present in output package. Will be overridden by 'Universal / javaOptions'"
               )
               false
 
@@ -48,8 +48,10 @@ trait ApplicationIniGenerator {
       .getOrElse(universalMappings)
 
   /**
-    * @param path that could be relative to app_home
-    * @return path relative to app_home
+    * @param path
+    *   that could be relative to app_home
+    * @return
+    *   path relative to app_home
     */
   protected def cleanApplicationIniPath(path: String): String
 }

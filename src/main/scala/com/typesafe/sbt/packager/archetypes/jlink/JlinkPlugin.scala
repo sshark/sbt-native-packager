@@ -1,6 +1,7 @@
 package com.typesafe.sbt.packager.archetypes
 package jlink
 
+import scala.collection.immutable
 import scala.sys.process.{BasicIO, Process, ProcessBuilder}
 import sbt._
 import sbt.Keys._
@@ -10,18 +11,20 @@ import com.typesafe.sbt.packager.Compat._
 import com.typesafe.sbt.packager.archetypes.jlink._
 import com.typesafe.sbt.packager.archetypes.scripts.BashStartScriptKeys
 import com.typesafe.sbt.packager.universal.UniversalPlugin
+import java.io.File
 
 /**
-  * == Jlink Application ==
+  * ==Jlink Application==
   *
-  * This class contains the default settings for creating and deploying an
-  * application as a runtime image using the standard `jlink` utility.
+  * This class contains the default settings for creating and deploying an application as a runtime image using the
+  * standard `jlink` utility.
   *
-  * == Configuration ==
+  * ==Configuration==
   *
   * This plugin adds new settings to configure your packaged application.
   *
-  * @example Enable this plugin in your `build.sbt` with
+  * @example
+  *   Enable this plugin in your `build.sbt` with
   *
   * {{{
   *  enablePlugins(JlinkPlugin)
@@ -30,29 +33,29 @@ import com.typesafe.sbt.packager.universal.UniversalPlugin
 object JlinkPlugin extends AutoPlugin {
 
   object autoImport extends JlinkKeys {
-    val JlinkIgnore = JlinkPlugin.Ignore
+    val JlinkIgnore: Ignore.type = JlinkPlugin.Ignore
   }
 
   import autoImport._
 
-  override def requires = JavaAppPackaging
+  override def requires: Plugins = JavaAppPackaging
 
   override lazy val projectSettings: Seq[Setting[_]] = Seq(
-    target in jlinkBuildImage := target.value / "jlink" / "output",
+    jlinkBuildImage / target := target.value / "jlink" / "output",
     jlinkBundledJvmLocation := "jre",
     bundledJvmLocation := Some(jlinkBundledJvmLocation.value),
     jlinkIgnoreMissingDependency :=
       (jlinkIgnoreMissingDependency ?? JlinkIgnore.nothing).value,
     // Don't use `fullClasspath in Compile` directly - this way we can inject
     // custom classpath elements for the scan.
-    fullClasspath in jlinkBuildImage := (fullClasspath in Compile).value,
+    jlinkBuildImage / fullClasspath := (Compile / fullClasspath).value,
     jlinkModules := (jlinkModules ?? Nil).value,
     jlinkModules ++= {
       val log = streams.value.log
-      val javaHome0 = javaHome.in(jlinkBuildImage).value.getOrElse(defaultJavaHome)
+      val javaHome0 = (jlinkBuildImage / javaHome).value.getOrElse(defaultJavaHome)
       val run = runJavaTool(javaHome0, log) _
-      val paths = fullClasspath.in(jlinkBuildImage).value.map(_.data.getPath)
-      val modulePath = jlinkModulePath.in(jlinkModules).value
+      val paths = (jlinkBuildImage / fullClasspath).value.map(_.data.getPath)
+      val modulePath = (jlinkModules / jlinkModulePath).value
       val shouldIgnore = jlinkIgnoreMissingDependency.value
 
       // We can find the java toolchain version by parsing the `release` file. This
@@ -65,51 +68,40 @@ object JlinkPlugin extends AutoPlugin {
       val releaseFile = javaHome0 / "release"
       val javaVersion = IO
         .readLines(releaseFile)
-        .collectFirst {
-          case javaVersionPattern(feature) => feature
+        .collectFirst { case javaVersionPattern(feature) =>
+          feature
         }
         .getOrElse(sys.error("JAVA_VERSION not found in ${releaseFile.getAbsolutePath}"))
 
       val modulePathOpts =
         if (modulePath.nonEmpty)
-          Vector("--module-path", modulePath.mkString(":"))
+          Vector("--module-path", modulePath.mkString(File.pathSeparator))
         else Vector.empty
 
       // Jdeps has a few convenient options (like --print-module-deps), but those
       // are not flexible enough - we need to parse the full output.
       val jdepsOutput = run("jdeps", "--multi-release" +: javaVersion +: modulePathOpts ++: "-R" +: paths)
 
-      val deps = jdepsOutput.linesIterator
-        // There are headers in some of the lines - ignore those.
-        .flatMap(PackageDependency.parse(_).iterator)
-        .toSeq
+      val deps = parseJdeps(jdepsOutput)
 
       // Check that we don't have any dangling dependencies that were not
       // explicitly ignored.
       val missingDeps = deps
         .collect {
-          case PackageDependency(dependent, dependee, PackageDependency.NotFound) =>
+          case PackageDependency(dependent, dependee, PackageDependency.NotFound)
+              if !shouldIgnore((dependent, dependee)) =>
             (dependent, dependee)
         }
-        .filterNot(shouldIgnore)
-        .distinct
-        .sorted
 
       if (missingDeps.nonEmpty) {
         log.error(
           "Dependee packages not found in classpath. You can use jlinkIgnoreMissingDependency to silence these."
         )
-        missingDeps.foreach {
-          case (a, b) =>
-            log.error(s"  $a -> $b")
+        missingDeps.foreach { case (a, b) =>
+          log.error(s"  $a -> $b")
         }
         sys.error("Missing package dependencies")
       }
-
-      val detectedModuleDeps = deps.collect {
-        case PackageDependency(_, _, PackageDependency.Module(module)) =>
-          module
-      }.toSet
 
       // Some JakartaEE artifacts use `java.*` module names, even though
       // they are not a part of the platform anymore.
@@ -133,12 +125,13 @@ object JlinkPlugin extends AutoPlugin {
         "jdk.xml.bind"
       )
 
-      val filteredModuleDeps = detectedModuleDeps
-        .filter { m =>
-          m.startsWith("jdk.") || m.startsWith("java.")
+      val filteredModuleDeps = deps
+        .collect {
+          case PackageDependency(_, _, PackageDependency.Module(m)) if m.startsWith("jdk.") || m.startsWith("java.") =>
+            m
         }
-        .filterNot(knownJakartaJavaModules.contains)
-        .filterNot(removedJavaModules.contains)
+        .diff(knownJakartaJavaModules)
+        .diff(removedJavaModules)
 
       // We always want `java.base`, and `jlink` requires at least one module.
       (filteredModuleDeps + "java.base").toSeq
@@ -154,15 +147,15 @@ object JlinkPlugin extends AutoPlugin {
 
       JlinkOptions(
         addModules = modules,
-        output = Some(target.in(jlinkBuildImage).value),
-        modulePath = jlinkModulePath.in(jlinkBuildImage).value
+        output = Some((jlinkBuildImage / target).value),
+        modulePath = (jlinkBuildImage / jlinkModulePath).value
       )
     },
     jlinkBuildImage := {
       val log = streams.value.log
-      val javaHome0 = javaHome.in(jlinkBuildImage).value.getOrElse(defaultJavaHome)
+      val javaHome0 = (jlinkBuildImage / javaHome).value.getOrElse(defaultJavaHome)
       val run = runJavaTool(javaHome0, log) _
-      val outDir = target.in(jlinkBuildImage).value
+      val outDir = (jlinkBuildImage / target).value
 
       IO.delete(outDir)
 
@@ -170,22 +163,32 @@ object JlinkPlugin extends AutoPlugin {
 
       outDir
     },
-    mappings in jlinkBuildImage := {
+    jlinkBuildImage / mappings := {
       val prefix = jlinkBundledJvmLocation.value
       // make sure the prefix has a terminating slash
-      val prefix0 = if (prefix.isEmpty) prefix else (prefix + "/")
+      val prefix0 = if (prefix.isEmpty) prefix else prefix + "/"
 
-      findFiles(jlinkBuildImage.value).map {
-        case (file, string) => (file, prefix0 + string)
+      findFiles(jlinkBuildImage.value).map { case (file, string) =>
+        (file, prefix0 + string)
       }
     },
-    mappings in Universal ++= mappings.in(jlinkBuildImage).value
+    Universal / mappings ++= (jlinkBuildImage / mappings).value
   )
 
   // Extracts java version from a release file line (`JAVA_VERSION` property):
   // - if the feature version is 1, yield the minor version number (e.g. 1.9.0 -> 9);
   // - otherwise yield the major version number (e.g. 11.0.3 -> 11).
   private[jlink] val javaVersionPattern = """JAVA_VERSION="(?:1\.)?(\d+).*?"""".r
+
+  private[jlink] def parseJdeps(jdepsOutput: String): immutable.TreeSet[PackageDependency] =
+    jdepsOutput.linesIterator.foldLeft(
+      immutable.TreeSet.empty[PackageDependency](PackageDependency.PackageDependencyOrdering)
+    ) { (z, l) =>
+      PackageDependency.parse(l) match {
+        case Some(pd) => z + pd
+        case _        => z
+      }
+    }
 
   // TODO: deduplicate with UniversalPlugin and DebianPlugin
   /** Finds all files in a directory. */
@@ -224,11 +227,11 @@ object JlinkPlugin extends AutoPlugin {
   // to make it a drop-in replacement for `ProcessBuilder.!!`.
   private def runForOutput(builder: ProcessBuilder, log: scala.sys.process.ProcessLogger): String = {
     val buffer = new StringBuffer
-    val code = builder.run(BasicIO(false, buffer, Some(log))).exitValue()
+    val code = builder.run(BasicIO(withIn = false, buffer, Some(log))).exitValue()
 
     if (code == 0) buffer.toString
     else {
-      log.out(buffer.toString)
+      log.err(buffer.toString)
       scala.sys.error("Nonzero exit value: " + code)
     }
   }
@@ -237,7 +240,7 @@ object JlinkPlugin extends AutoPlugin {
     def apply(addModules: Seq[String], output: Option[File], modulePath: Seq[File]): Seq[String] =
       option("--output", output) ++
         list("--add-modules", addModules, ",") ++
-        list("--module-path", modulePath, ":")
+        list("--module-path", modulePath, File.pathSeparator)
 
     private def option[A](arg: String, value: Option[A]): Seq[String] =
       value.toSeq.flatMap(a => Seq(arg, a.toString))
@@ -247,15 +250,46 @@ object JlinkPlugin extends AutoPlugin {
   }
 
   // Jdeps output row
-  private final case class PackageDependency(dependent: String, dependee: String, source: PackageDependency.Source)
+  private[jlink] final case class PackageDependency(
+    dependent: String,
+    dependee: String,
+    source: PackageDependency.Source
+  )
 
-  private final object PackageDependency {
+  private[jlink] final object PackageDependency {
+
+    implicit object PackageDependencyOrdering extends Ordering[PackageDependency] {
+      override def compare(x: PackageDependency, y: PackageDependency): Int = {
+        var result = x.dependent.compareTo(y.dependent)
+        if (result == 0)
+          result = x.dependee.compareTo(y.dependee)
+        if (result == 0)
+          result = SourceOrdering.compare(x.source, y.source)
+        result
+      }
+    }
+
+    implicit object SourceOrdering extends Ordering[Source] {
+      override def compare(x: Source, y: Source): Int =
+        (x, y) match {
+          case (`x`, `x`)                    => 0
+          case (NotFound, _) | (_, NotFound) => -1
+          case (Classes, _) | (_, Classes)   => -1
+          case (JarOrDir(n1), JarOrDir(n2))  => n1.compareTo(n2)
+          case (_: JarOrDir, _)              => 1
+          case (_, _: JarOrDir)              => 1
+          case (Module(n1), Module(n2))      => n1.compareTo(n2)
+        }
+    }
+
     sealed trait Source
 
     object Source {
       def parse(s: String): Source =
         s match {
-          case "not found" => NotFound
+          case "not found"                          => NotFound
+          case "classes"                            => Classes
+          case "JDK internal API (jdk.unsupported)" => Module("jdk.unsupported")
           // We have no foolproof way to separate jars from modules here, so
           // we have to do something flaky.
           case name
@@ -268,6 +302,7 @@ object JlinkPlugin extends AutoPlugin {
     }
 
     case object NotFound extends Source
+    case object Classes extends Source
     final case class Module(name: String) extends Source
     final case class JarOrDir(name: String) extends Source
 
@@ -285,13 +320,14 @@ object JlinkPlugin extends AutoPlugin {
     // There are also jar/directory/module-level dependencies, but we are
     // not interested in those:
     // foo.jar -> scala-library-2.12.8.jar
+    // akka-actor-typed_2.13-2.6.15.jar -> java.base
     // classes -> java.base
     // foo.jar -> not found
     private val pattern = """^\s+([^\s]+)\s+->\s+([^\s]+)\s+([^\s].*?)\s*$""".r
 
     def parse(s: String): Option[PackageDependency] =
       s match {
-        case pattern(dependent, dependee, source) =>
+        case pattern(dependent, dependee, source) if dependent != dependee =>
           Some(PackageDependency(dependent, dependee, Source.parse(source)))
         case _ => None
       }
@@ -302,16 +338,14 @@ object JlinkPlugin extends AutoPlugin {
     val everything: ((String, String)) => Boolean = Function.const(true)
     def only(dependencies: (String, String)*): ((String, String)) => Boolean = dependencies.toSet.contains
 
-    /** This matches pairs by their respective ''package'' prefixes. This means that `"foo.bar"`
-      * matches `"foo.bar"`, `"foo.bar.baz"`, but not `"foo.barqux"`. Empty
-      * string matches anything.
+    /**
+      * This matches pairs by their respective ''package'' prefixes. This means that `"foo.bar"` matches `"foo.bar"`,
+      * `"foo.bar.baz"`, but not `"foo.barqux"`. Empty string matches anything.
       */
-    def byPackagePrefix(prefixPairs: (String, String)*): ((String, String)) => Boolean = {
-      case (a, b) =>
-        prefixPairs.exists {
-          case (prefixA, prefixB) =>
-            packagePrefixMatches(prefixA, a) && packagePrefixMatches(prefixB, b)
-        }
+    def byPackagePrefix(prefixPairs: (String, String)*): ((String, String)) => Boolean = { case (a, b) =>
+      prefixPairs.exists { case (prefixA, prefixB) =>
+        packagePrefixMatches(prefixA, a) && packagePrefixMatches(prefixB, b)
+      }
     }
 
     private def packagePrefixMatches(prefix: String, s: String): Boolean =

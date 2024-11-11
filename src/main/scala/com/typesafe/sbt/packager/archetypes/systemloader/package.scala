@@ -50,10 +50,14 @@ package object systemloader {
 
   /**
     * Create the linuxPackageMapping for the systemloader start-script/conffile
-    * @param scriptName - optional name from `linuxStartScriptName.value`
-    * @param script - file with contents from ` linuxMakeStartScript.value`
-    * @param location - target destination from `defaultLinuxStartScriptLocation.value`
-    * @param isConf - if the start script should be registered as a config file
+    * @param scriptName
+    *   optional name from `linuxStartScriptName.value`
+    * @param script
+    *   file with contents from ` linuxMakeStartScript.value`
+    * @param location
+    *   target destination from `defaultLinuxStartScriptLocation.value`
+    * @param isConf
+    *   if the start script should be registered as a config file
     */
   def startScriptMapping(
     scriptName: Option[String],
@@ -63,7 +67,7 @@ package object systemloader {
   ): Seq[LinuxPackageMapping] = {
     val name = scriptName.getOrElse(
       sys.error(
-        """No linuxStartScriptName defined. Add `linuxStartScriptName in <PackageFormat> := Some("name.service")"""
+        """No linuxStartScriptName defined. Add `<PackageFormat> / linuxStartScriptName := Some("name.service")"""
       )
     )
     val path = location + "/" + name

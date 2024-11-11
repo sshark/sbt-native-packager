@@ -10,7 +10,7 @@ import sbt.Keys._
 import sbt._
 
 /**
-  * == Bat StartScript Plugin ==
+  * ==Bat StartScript Plugin==
   *
   * This plugins creates a start bat script to run an application built with the
   * [[com.typesafe.sbt.packager.archetypes.JavaAppPackaging]].
@@ -50,7 +50,8 @@ object BatStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator with
     extraDefines: Seq[String],
     override val replacements: Seq[(String, String)],
     override val templateLocation: File,
-    bundledJvmLocation: Option[String]
+    bundledJvmLocation: Option[String],
+    override val forwarderTemplateLocation: Option[File]
   ) extends ScriptConfig {
 
     @deprecated("1.3.21", "")
@@ -62,7 +63,16 @@ object BatStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator with
       replacements: Seq[(String, String)],
       templateLocation: File
     ) =
-      this(executableScriptName, scriptClasspath, configLocation, extraDefines, replacements, templateLocation, None)
+      this(
+        executableScriptName,
+        scriptClasspath,
+        configLocation,
+        extraDefines,
+        replacements,
+        templateLocation,
+        None,
+        None
+      )
 
     @deprecated("1.3.21", "")
     def copy(
@@ -80,7 +90,8 @@ object BatStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator with
         extraDefines,
         replacements,
         templateLocation,
-        bundledJvmLocation
+        bundledJvmLocation,
+        forwarderTemplateLocation
       )
 
     override def withScriptName(scriptName: String): BatScriptConfig = copy(executableScriptName = scriptName)
@@ -107,6 +118,7 @@ object BatStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator with
         extraDefines,
         replacements,
         templateLocation,
+        None,
         None
       )
 
@@ -117,38 +129,42 @@ object BatStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator with
   override def projectSettings: Seq[Setting[_]] =
     Seq(
       batScriptTemplateLocation := (sourceDirectory.value / "templates" / batTemplate),
+      batForwarderTemplateLocation := Some(sourceDirectory.value / "templates" / forwarderTemplateName),
       batScriptConfigLocation := (batScriptConfigLocation ?? Some(appIniLocation)).value,
       batScriptExtraDefines := Nil,
       batScriptReplacements := Replacements(executableScriptName.value),
       // Generating the application configuration
-      mappings in Universal := generateApplicationIni(
-        (mappings in Universal).value,
-        (javaOptions in Universal).value,
+      Universal / mappings := generateApplicationIni(
+        (Universal / mappings).value,
+        (Universal / javaOptions).value,
         batScriptConfigLocation.value,
-        (target in Universal).value,
+        (Universal / target).value,
         streams.value.log
       ),
       makeBatScripts := generateStartScripts(
         BatScriptConfig(
           executableScriptName = executableScriptName.value,
-          scriptClasspath = (scriptClasspath in batScriptReplacements).value,
+          scriptClasspath = (batScriptReplacements / scriptClasspath).value,
           configLocation = batScriptConfigLocation.value,
           extraDefines = batScriptExtraDefines.value,
           replacements = batScriptReplacements.value,
           templateLocation = batScriptTemplateLocation.value,
-          bundledJvmLocation = bundledJvmLocation.value
+          bundledJvmLocation = bundledJvmLocation.value,
+          forwarderTemplateLocation = batForwarderTemplateLocation.value
         ),
-        (mainClass in (Compile, batScriptReplacements)).value,
-        (discoveredMainClasses in Compile).value,
-        (target in Universal).value / "scripts",
+        (Compile / batScriptReplacements / mainClass).value,
+        (Compile / discoveredMainClasses).value,
+        (Universal / target).value / "scripts",
         streams.value.log
       ),
-      mappings in Universal ++= makeBatScripts.value
+      Universal / mappings ++= makeBatScripts.value
     )
 
   /**
-    * @param path that could be relative to APP_HOME
-    * @return path relative to APP_HOME
+    * @param path
+    *   that could be relative to APP_HOME
+    * @return
+    *   path relative to APP_HOME
     */
   protected def cleanApplicationIniPath(path: String): String =
     path.stripPrefix("%APP_HOME%\\").stripPrefix("/").replace('\\', '/')
@@ -202,8 +218,8 @@ object BatStartScriptPlugin extends AutoPlugin with ApplicationIniGenerator with
 
     // TODO - use more of the template writer for this...
     private[this] def replace(line: String, replacements: Seq[(String, String)]): String =
-      replacements.foldLeft(line) {
-        case (in, (key, value)) => in.replaceAll("@@" + key + "@@", java.util.regex.Matcher.quoteReplacement(value))
+      replacements.foldLeft(line) { case (in, (key, value)) =>
+        in.replaceAll("@@" + key + "@@", java.util.regex.Matcher.quoteReplacement(value))
       }
   }
 

@@ -5,7 +5,8 @@ import sbt._
 /**
   * Keys related to the [[BashStartScriptPlugin]]
   *
-  * @see [[BashStartScriptPlugin]]
+  * @see
+  *   [[BashStartScriptPlugin]]
   */
 trait BashStartScriptKeys {
   val makeBashScripts = TaskKey[Seq[(File, String)]]("makeBashScripts", "Creates start scripts for this project.")
@@ -30,4 +31,7 @@ trait BashStartScriptKeys {
     "bashScriptConfigLocation",
     "The location where the bash script will load default argument configuration from."
   )
+
+  val bashForwarderTemplateLocation =
+    TaskKey[Option[File]]("bashForwarderTemplateLocation", "The location of the bash forwarder template")
 }
